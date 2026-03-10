@@ -6,36 +6,37 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. SERVIDOR WEB PARA RENDER (Mantiene el servicio "Live")
+# 1. SERVIDOR WEB (Mantiene el bot vivo en Render)
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot de Nuevo León RP está en línea."
+    return "Servidor de Nuevo León RP Encendido"
 
-def run():
+def run_web():
+    # Render usa el puerto 10000 por defecto
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
+# 2. CONFIGURACIÓN DEL BOT DE DISCORD
+# Activamos todos los permisos para que no haya errores de conexión
+intents = discord.Intents.all()
 
-# 2. CONFIGURACIÓN DEL BOT CON TODOS LOS PERMISOS (Intents)
 class NuevoLeonBot(commands.Bot):
     def __init__(self):
-        # Activamos todos los intents para evitar problemas de conexión
-        intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Esto registra los comandos / en Discord
-        await self.tree.sync()
-        print(f"✅ Comandos sincronizados correctamente")
+        # Sincroniza los comandos / con Discord
+        try:
+            synced = await self.tree.sync()
+            print(f"✅ {len(synced)} comandos sincronizados correctamente")
+        except Exception as e:
+            print(f"❌ Error al sincronizar comandos: {e}")
 
 bot = NuevoLeonBot()
 
-# 3. BASE DE DATOS PARA INEs
+# 3. BASE DE DATOS (Sistema de INEs)
 def init_db():
     conn = sqlite3.connect('nuevoleon_rp.db')
     cursor = conn.cursor()
@@ -44,16 +45,17 @@ def init_db():
     conn.commit()
     conn.close()
 
-# 4. EVENTO DE INICIO (Aquí sabremos si el Token funcionó)
+# 4. EVENTOS Y COMANDOS
 @bot.event
 async def on_ready():
     print(f'---')
     print(f'✅ BOT CONECTADO: {bot.user.name}')
-    print(f'✅ ID DEL BOT: {bot.user.id}')
+    print(f'✅ ID: {bot.user.id}')
     print(f'---')
+    # Cambia el estado del bot en Discord
+    await bot.change_presence(activity=discord.Game(name="Nuevo León RP 🤠"))
 
-# 5. COMANDOS DE ROL
-@bot.tree.command(name="crear-ine", description="Tramita tu INE de Nuevo León RP")
+@bot.tree.command(name="crear-ine", description="Registra tu identificación oficial")
 async def crear_ine(interaction: discord.Interaction, nombre: str, edad: int, nacimiento: str, pais: str):
     conn = sqlite3.connect('nuevoleon_rp.db')
     cursor = conn.cursor()
@@ -61,13 +63,13 @@ async def crear_ine(interaction: discord.Interaction, nombre: str, edad: int, na
     try:
         cursor.execute("INSERT INTO ines VALUES (?, ?, ?, ?, ?)", (user_id, nombre, edad, nacimiento, pais))
         conn.commit()
-        await interaction.response.send_message(f"✅ **{interaction.user.display_name}**, tu INE ha sido registrada con éxito.")
+        await interaction.response.send_message(f"✅ **{interaction.user.display_name}**, tu INE ha sido registrada.")
     except sqlite3.IntegrityError:
         await interaction.response.send_message("⚠️ Ya tienes una INE registrada. Usa `/ver-ine`.", ephemeral=True)
     finally:
         conn.close()
 
-@bot.tree.command(name="ver-ine", description="Muestra tu INE")
+@bot.tree.command(name="ver-ine", description="Muestra tu INE actual")
 async def ver_ine(interaction: discord.Interaction):
     conn = sqlite3.connect('nuevoleon_rp.db')
     cursor = conn.cursor()
@@ -77,26 +79,30 @@ async def ver_ine(interaction: discord.Interaction):
     conn.close()
 
     if datos:
-        embed = discord.Embed(title="📇 INE - NUEVO LEÓN RP", color=0x004c99)
+        embed = discord.Embed(title="📇 IDENTIFICACIÓN OFICIAL - NUEVO LEÓN RP", color=0x008000)
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        embed.add_field(name="👤 Nombre", value=datos[1], inline=False)
+        embed.add_field(name="👤 Nombre Completo", value=datos[1], inline=False)
         embed.add_field(name="🎂 Edad", value=f"{datos[2]} años", inline=True)
-        embed.add_field(name="📅 Nacimiento", value=datos[3], inline=True)
-        embed.add_field(name="🌎 País", value=datos[4], inline=False)
+        embed.add_field(name="📅 Fecha de Nac.", value=datos[3], inline=True)
+        embed.add_field(name="🌎 Nacionalidad", value=datos[4], inline=False)
+        embed.set_footer(text="Estado de Nuevo León - Sistema de Registro")
         await interaction.response.send_message(embed=embed)
     else:
-        await interaction.response.send_message("❌ No tienes INE registrada.", ephemeral=True)
+        await interaction.response.send_message("❌ No tienes una INE. Tramítala con `/crear-ine`.", ephemeral=True)
 
-# 6. ARRANQUE FINAL
+# 5. ARRANQUE DEL SISTEMA
 if __name__ == "__main__":
     init_db()
-    keep_alive()
+    # Iniciamos el servidor web en un hilo secundario
+    web_thread = Thread(target=run_web)
+    web_thread.start()
+    
+    # Iniciamos el bot de Discord (Usa el token de las variables de entorno de Render)
     token = os.getenv('DISCORD_TOKEN')
     if token:
         try:
             bot.run(token)
         except Exception as e:
-            print(f"❌ ERROR DE LOGIN: {e}")
+            print(f"❌ Error crítico de inicio: {e}")
     else:
-        print("❌ ERROR: No se encontró la variable DISCORD_TOKEN en Render")
-
+        print("❌ ERROR: No se encontró DISCORD_TOKEN en Render -> Environment")
