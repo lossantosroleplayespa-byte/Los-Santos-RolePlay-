@@ -6,16 +6,17 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. SERVIDOR WEB DE MENTIRA (Para que Render no apague el bot)
+# 1. SERVIDOR WEB PARA RENDER (Engañamos al sistema para que no se apague)
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "El servidor de Nuevo León RP está activo."
+    return "Bot de Nuevo León RP Activo"
 
 def run():
-    # Render usa el puerto 10000 por defecto en servicios web
-    app.run(host='0.0.0.0', port=10000)
+    # Render asigna un puerto automáticamente, aquí lo leemos
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run)
@@ -30,18 +31,18 @@ class NuevoLeonBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print(f"✅ Comandos sincronizados")
+        print(f"✅ Comandos sincronizados en Discord")
 
 bot = NuevoLeonBot()
 
-# 3. BASE DE DATOS
+# 3. BASE DE DATOS (INEs)
 conn = sqlite3.connect('nuevoleon_rp.db')
 cursor = conn.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS ines 
                  (user_id TEXT PRIMARY KEY, nombre TEXT, edad INTEGER, nacimiento TEXT, pais TEXT)''')
 conn.commit()
 
-# 4. COMANDOS
+# 4. COMANDOS DE ROL
 @bot.tree.command(name="crear-ine", description="Tramita tu INE de Nuevo León RP")
 async def crear_ine(interaction: discord.Interaction, nombre: str, edad: int, nacimiento: str, pais: str):
     user_id = str(interaction.user.id)
@@ -50,7 +51,7 @@ async def crear_ine(interaction: discord.Interaction, nombre: str, edad: int, na
         conn.commit()
         await interaction.response.send_message(f"✅ **{interaction.user.display_name}**, tu INE ha sido registrada.")
     except sqlite3.IntegrityError:
-        await interaction.response.send_message("⚠️ Ya tienes una INE. Usa `/eliminar-ine`.", ephemeral=True)
+        await interaction.response.send_message("⚠️ Ya tienes una INE registrada.", ephemeral=True)
 
 @bot.tree.command(name="ver-ine", description="Muestra tu INE")
 async def ver_ine(interaction: discord.Interaction):
@@ -66,18 +67,21 @@ async def ver_ine(interaction: discord.Interaction):
         embed.add_field(name="🌎 País", value=datos[4], inline=False)
         await interaction.response.send_message(embed=embed)
     else:
-        await interaction.response.send_message("❌ No tienes INE.", ephemeral=True)
+        await interaction.response.send_message("❌ No tienes INE. Usa `/crear-ine`.", ephemeral=True)
 
 @bot.tree.command(name="eliminar-ine", description="Borra tu INE")
 async def eliminar_ine(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     cursor.execute("DELETE FROM ines WHERE user_id=?", (user_id,))
     conn.commit()
-    await interaction.response.send_message("🗑️ INE eliminada.", ephemeral=True)
+    await interaction.response.send_message("🗑️ Registro eliminado.", ephemeral=True)
 
-# 5. ENCENDIDO
+# 5. ARRANQUE
 if __name__ == "__main__":
-    keep_alive() # Esto arranca la "página web" de mentira
-    token = os.getenv('DISCORD_TOKEN')
-    bot.run(token)
- 
+    keep_alive() # Inicia el servidor web
+    token = os.getenv('DISCORD_TOKEN') # Lee el token de Render
+    if token:
+        bot.run(token)
+    else:
+        print("❌ ERROR: No se encontró la variable DISCORD_TOKEN en Render")
+
