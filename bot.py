@@ -1,3 +1,4 @@
+print("EL BOT ESTA ARRANCANDO")
 import discord
 from discord.ext import commands
 from discord import app_commands
