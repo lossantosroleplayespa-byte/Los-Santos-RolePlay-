@@ -6,25 +6,24 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. CONFIGURACIÓN DEL SERVIDOR WEB (Para que Render no lo apague)
+# 1. SERVIDOR WEB (Para que Render no dé error de puerto)
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Servidor de Nuevo León RP Activo ✅"
+    return "Bot de Nuevo León RP Online ✅"
 
 def run_web():
-    # Render usa el puerto 10000 por defecto
+    # Usamos el puerto 10000 que es el que Render exige
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_web)
-    t.daemon = True # Esto permite que el hilo se cierre si el bot se detiene
+    t.daemon = True
     t.start()
 
 # 2. CONFIGURACIÓN DEL BOT
-# Usamos Intents.all() para evitar cualquier error de permisos
 intents = discord.Intents.all()
 
 class NuevoLeonBot(commands.Bot):
@@ -32,10 +31,10 @@ class NuevoLeonBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Sincroniza los comandos de barra (/) con Discord
+        # Sincroniza los comandos de barra (/)
         try:
             await self.tree.sync()
-            print("✅ Comandos / sincronizados")
+            print("✅ Comandos de barra sincronizados")
         except Exception as e:
             print(f"❌ Error al sincronizar: {e}")
 
@@ -55,11 +54,10 @@ def init_db():
 async def on_ready():
     print(f'---')
     print(f'✅ BOT CONECTADO: {bot.user.name}')
-    print(f'✅ EL BOT YA ESTÁ EN LÍNEA EN DISCORD')
     print(f'---')
     await bot.change_presence(activity=discord.Game(name="Nuevo León RP 🤠"))
 
-# 5. COMANDOS DE ROL (/)
+# 5. COMANDOS (/)
 @bot.tree.command(name="crear-ine", description="Tramita tu INE de Nuevo León RP")
 async def crear_ine(interaction: discord.Interaction, nombre: str, edad: int, nacimiento: str, pais: str):
     conn = sqlite3.connect('nuevoleon_rp.db')
@@ -92,21 +90,18 @@ async def ver_ine(interaction: discord.Interaction):
         embed.add_field(name="🌎 País", value=datos[4], inline=False)
         await interaction.response.send_message(embed=embed)
     else:
-        await interaction.response.send_message("❌ No tienes INE. Usa `/crear-ine`.", ephemeral=True)
+        await interaction.response.send_message("❌ No tienes INE registrada.", ephemeral=True)
 
-# 6. EJECUCIÓN
+# 6. ARRANQUE
 if __name__ == "__main__":
     init_db()
-    keep_alive() # Arranca el servidor web para Render
+    keep_alive() # Arranca Flask PRIMERO
     
     token = os.getenv('DISCORD_TOKEN')
     if token:
         try:
             bot.run(token)
-        except discord.errors.LoginFailure:
-            print("❌ ERROR: El Token es incorrecto o inválido.")
         except Exception as e:
-            print(f"❌ Error crítico: {e}")
+            print(f"❌ Error de inicio: {e}")
     else:
-        print("❌ ERROR: No se encontró la variable DISCORD_TOKEN en Render Environment.")
-
+        print("❌ ERROR: No se encontró la variable DISCORD_TOKEN en Render")
