@@ -9,7 +9,7 @@ from flask import Flask
 from threading import Thread
 
 # -----------------------
-# SERVIDOR WEB (para Render)
+# SERVIDOR WEB (Render)
 # -----------------------
 
 app = Flask(__name__)
@@ -69,7 +69,7 @@ def generar_curp(nombre, nacimiento):
     return f"{inicial}{fecha}{extra}"
 
 # -----------------------
-# BOT CONFIG
+# CONFIG BOT
 # -----------------------
 
 intents = discord.Intents.default()
@@ -91,12 +91,18 @@ async def on_ready():
     print(f"BOT ONLINE: {bot.user}")
     print("-------------------")
 
+    try:
+        synced = await bot.tree.sync()
+        print(f"Comandos sincronizados: {len(synced)}")
+    except Exception as e:
+        print(e)
+
     await bot.change_presence(
         activity=discord.Game("Nuevo León RP")
     )
 
 # -----------------------
-# DB FUNCIONES
+# FUNCIONES DB
 # -----------------------
 
 def obtener_ine(user_id):
@@ -110,7 +116,6 @@ def obtener_ine(user_id):
     )
 
     datos = cursor.fetchone()
-
     conn.close()
 
     return datos
@@ -132,15 +137,12 @@ def crear_ine_db(user_id, nombre, edad, nacimiento, pais):
         )
 
         conn.commit()
-
         return True
 
     except sqlite3.IntegrityError:
-
         return False
 
     finally:
-
         conn.close()
 
 # -----------------------
@@ -270,9 +272,7 @@ if __name__ == "__main__":
     token = os.getenv("DISCORD_TOKEN")
 
     if not token:
-
         print("❌ No existe DISCORD_TOKEN")
 
     else:
-
         bot.run(token)
