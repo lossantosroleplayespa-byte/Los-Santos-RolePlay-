@@ -1,9 +1,10 @@
 print("EL BOT ESTA ARRANCANDO")
+
 import discord
 from discord.ext import commands
-from discord import app_commands
 import sqlite3
 import os
+import random
 from flask import Flask
 from threading import Thread
 
@@ -15,7 +16,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot Nuevo León RP activo ✅"
+    return "Bot Nuevo León RP activo"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -29,6 +30,7 @@ def keep_alive():
 # -----------------------
 
 def init_db():
+
     conn = sqlite3.connect("nuevoleon_rp.db")
     cursor = conn.cursor()
 
@@ -38,12 +40,33 @@ def init_db():
         nombre TEXT,
         edad INTEGER,
         nacimiento TEXT,
-        pais TEXT
+        pais TEXT,
+        ine_id TEXT,
+        curp TEXT
     )
     """)
 
     conn.commit()
     conn.close()
+
+# -----------------------
+# GENERADORES
+# -----------------------
+
+def generar_ine_id():
+    return f"NL-{random.randint(100000,999999)}"
+
+def generar_curp(nombre, nacimiento):
+
+    partes = nombre.upper().split()
+    inicial = partes[0][0]
+
+    fecha = nacimiento.replace("-", "")
+
+    letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    extra = "".join(random.choice(letras) for _ in range(3))
+
+    return f"{inicial}{fecha}{extra}"
 
 # -----------------------
 # CONFIG BOT
@@ -61,26 +84,29 @@ class NuevoLeonBot(commands.Bot):
         )
 
     async def setup_hook(self):
+
         try:
             await self.tree.sync()
-            print("✅ Comandos sincronizados")
+            print("Comandos sincronizados")
+
         except Exception as e:
-            print(f"❌ Error sincronizando comandos: {e}")
+            print(f"Error sincronizando comandos: {e}")
 
 bot = NuevoLeonBot()
 
 # -----------------------
-# EVENTOS
+# EVENTO READY
 # -----------------------
 
 @bot.event
 async def on_ready():
+
     print("--------------")
     print(f"BOT ONLINE: {bot.user}")
     print("--------------")
 
     await bot.change_presence(
-        activity=discord.Game("Nuevo León RP 🤠")
+        activity=discord.Game("Nuevo León RP")
     )
 
 # -----------------------
@@ -108,10 +134,14 @@ def crear_ine_db(user_id, nombre, edad, nacimiento, pais):
     conn = sqlite3.connect("nuevoleon_rp.db")
     cursor = conn.cursor()
 
+    ine_id = generar_ine_id()
+    curp = generar_curp(nombre, nacimiento)
+
     try:
+
         cursor.execute(
-            "INSERT INTO ines VALUES (?, ?, ?, ?, ?)",
-            (user_id, nombre, edad, nacimiento, pais)
+            "INSERT INTO ines VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, nombre, edad, nacimiento, pais, ine_id, curp)
         )
 
         conn.commit()
@@ -124,7 +154,7 @@ def crear_ine_db(user_id, nombre, edad, nacimiento, pais):
         conn.close()
 
 # -----------------------
-# COMANDOS
+# COMANDO CREAR INE
 # -----------------------
 
 @bot.tree.command(
@@ -162,6 +192,9 @@ async def crear_ine(
             ephemeral=True
         )
 
+# -----------------------
+# COMANDO VER INE
+# -----------------------
 
 @bot.tree.command(
     name="ver-ine",
@@ -175,8 +208,9 @@ async def ver_ine(interaction: discord.Interaction):
     if datos:
 
         embed = discord.Embed(
-            title="📇 INE - Nuevo León RP",
-            color=0x1a73e8
+            title="🪪 Instituto Nacional Electoral",
+            description="Credencial de Identificación • Nuevo León RP",
+            color=0x006847
         )
 
         embed.set_thumbnail(
@@ -184,27 +218,47 @@ async def ver_ine(interaction: discord.Interaction):
         )
 
         embed.add_field(
-            name="Nombre",
+            name="👤 Nombre",
             value=datos[1],
             inline=False
         )
 
         embed.add_field(
-            name="Edad",
+            name="🎂 Edad",
             value=f"{datos[2]} años",
             inline=True
         )
 
         embed.add_field(
-            name="Nacimiento",
+            name="📅 Nacimiento",
             value=datos[3],
             inline=True
         )
 
         embed.add_field(
-            name="País",
+            name="🌎 País",
             value=datos[4],
             inline=False
+        )
+
+        embed.add_field(
+            name="🆔 ID INE",
+            value=datos[5],
+            inline=True
+        )
+
+        embed.add_field(
+            name="🔐 CURP",
+            value=datos[6],
+            inline=True
+        )
+
+        embed.set_image(
+            url="https://i.imgur.com/3bQ7Q9T.png"
+        )
+
+        embed.set_footer(
+            text="Gobierno de Nuevo León • Documento Oficial RP"
         )
 
         await interaction.response.send_message(
@@ -231,5 +285,6 @@ if __name__ == "__main__":
 
     if not token:
         print("❌ No existe DISCORD_TOKEN")
+
     else:
         bot.run(token)
