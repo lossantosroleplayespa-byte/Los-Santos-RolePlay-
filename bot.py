@@ -9,7 +9,7 @@ from flask import Flask
 from threading import Thread
 
 # -----------------------
-# SERVIDOR WEB (Render)
+# SERVIDOR WEB (para Render)
 # -----------------------
 
 app = Flask(__name__)
@@ -23,7 +23,9 @@ def run_web():
     app.run(host="0.0.0.0", port=port)
 
 def keep_alive():
-    Thread(target=run_web).start()
+    t = Thread(target=run_web)
+    t.daemon = True
+    t.start()
 
 # -----------------------
 # BASE DE DATOS
@@ -58,9 +60,7 @@ def generar_ine_id():
 
 def generar_curp(nombre, nacimiento):
 
-    partes = nombre.upper().split()
-    inicial = partes[0][0]
-
+    inicial = nombre[0].upper()
     fecha = nacimiento.replace("-", "")
 
     letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -69,30 +69,16 @@ def generar_curp(nombre, nacimiento):
     return f"{inicial}{fecha}{extra}"
 
 # -----------------------
-# CONFIG BOT
+# BOT CONFIG
 # -----------------------
 
 intents = discord.Intents.default()
 intents.message_content = True
 
-class NuevoLeonBot(commands.Bot):
-
-    def __init__(self):
-        super().__init__(
-            command_prefix="!",
-            intents=intents
-        )
-
-    async def setup_hook(self):
-
-        try:
-            await self.tree.sync()
-            print("Comandos sincronizados")
-
-        except Exception as e:
-            print(f"Error sincronizando comandos: {e}")
-
-bot = NuevoLeonBot()
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents
+)
 
 # -----------------------
 # EVENTO READY
@@ -101,16 +87,16 @@ bot = NuevoLeonBot()
 @bot.event
 async def on_ready():
 
-    print("--------------")
+    print("-------------------")
     print(f"BOT ONLINE: {bot.user}")
-    print("--------------")
+    print("-------------------")
 
     await bot.change_presence(
         activity=discord.Game("Nuevo León RP")
     )
 
 # -----------------------
-# FUNCIONES DB
+# DB FUNCIONES
 # -----------------------
 
 def obtener_ine(user_id):
@@ -124,6 +110,7 @@ def obtener_ine(user_id):
     )
 
     datos = cursor.fetchone()
+
     conn.close()
 
     return datos
@@ -145,12 +132,15 @@ def crear_ine_db(user_id, nombre, edad, nacimiento, pais):
         )
 
         conn.commit()
+
         return True
 
     except sqlite3.IntegrityError:
+
         return False
 
     finally:
+
         conn.close()
 
 # -----------------------
@@ -182,7 +172,7 @@ async def crear_ine(
     if creada:
 
         await interaction.response.send_message(
-            f"✅ INE registrada para **{interaction.user.display_name}**"
+            f"✅ INE registrada para {interaction.user.display_name}"
         )
 
     else:
@@ -218,47 +208,43 @@ async def ver_ine(interaction: discord.Interaction):
         )
 
         embed.add_field(
-            name="👤 Nombre",
+            name="Nombre",
             value=datos[1],
             inline=False
         )
 
         embed.add_field(
-            name="🎂 Edad",
-            value=f"{datos[2]} años",
+            name="Edad",
+            value=str(datos[2]),
             inline=True
         )
 
         embed.add_field(
-            name="📅 Nacimiento",
+            name="Nacimiento",
             value=datos[3],
             inline=True
         )
 
         embed.add_field(
-            name="🌎 País",
+            name="País",
             value=datos[4],
             inline=False
         )
 
         embed.add_field(
-            name="🆔 ID INE",
+            name="ID INE",
             value=datos[5],
             inline=True
         )
 
         embed.add_field(
-            name="🔐 CURP",
+            name="CURP",
             value=datos[6],
             inline=True
         )
 
-        embed.set_image(
-            url="https://i.imgur.com/3bQ7Q9T.png"
-        )
-
         embed.set_footer(
-            text="Gobierno de Nuevo León • Documento Oficial RP"
+            text="Gobierno de Nuevo León RP"
         )
 
         await interaction.response.send_message(
@@ -268,7 +254,7 @@ async def ver_ine(interaction: discord.Interaction):
     else:
 
         await interaction.response.send_message(
-            "❌ No tienes INE registrada.",
+            "❌ No tienes INE registrada",
             ephemeral=True
         )
 
@@ -284,7 +270,9 @@ if __name__ == "__main__":
     token = os.getenv("DISCORD_TOKEN")
 
     if not token:
+
         print("❌ No existe DISCORD_TOKEN")
 
     else:
+
         bot.run(token)
