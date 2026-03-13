@@ -8,6 +8,10 @@ import random
 from flask import Flask
 from threading import Thread
 
+from PIL import Image, ImageDraw
+import requests
+from io import BytesIO
+
 # -----------------------
 # SERVIDOR WEB (Render)
 # -----------------------
@@ -69,6 +73,35 @@ def generar_curp(nombre, nacimiento):
     return f"{inicial}{fecha}{extra}"
 
 # -----------------------
+# GENERAR IMAGEN INE
+# -----------------------
+
+def generar_ine_imagen(usuario, datos):
+
+    img = Image.new("RGB", (600,350), (255,255,255))
+    draw = ImageDraw.Draw(img)
+
+    draw.text((20,20),"INSTITUTO NACIONAL ELECTORAL",(0,120,0))
+
+    response = requests.get(usuario.display_avatar.url)
+    avatar = Image.open(BytesIO(response.content))
+    avatar = avatar.resize((120,120))
+
+    img.paste(avatar,(20,80))
+
+    draw.text((180,80),f"Nombre: {datos[1]}",(0,0,0))
+    draw.text((180,110),f"Edad: {datos[2]}",(0,0,0))
+    draw.text((180,140),f"Nacimiento: {datos[3]}",(0,0,0))
+    draw.text((180,170),f"Pais: {datos[4]}",(0,0,0))
+    draw.text((180,200),f"ID: {datos[5]}",(0,0,0))
+    draw.text((180,230),f"CURP: {datos[6]}",(0,0,0))
+
+    ruta = f"ine_{usuario.id}.png"
+    img.save(ruta)
+
+    return ruta
+
+# -----------------------
 # CONFIG BOT
 # -----------------------
 
@@ -96,10 +129,6 @@ async def on_ready():
         print(f"Comandos sincronizados: {len(synced)}")
     except Exception as e:
         print(e)
-
-    await bot.change_presence(
-        activity=discord.Game("Nuevo León RP")
-    )
 
 # -----------------------
 # FUNCIONES DB
@@ -145,13 +174,27 @@ def crear_ine_db(user_id, nombre, edad, nacimiento, pais):
     finally:
         conn.close()
 
+
+def eliminar_ine_db(user_id):
+
+    conn = sqlite3.connect("nuevoleon_rp.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM ines WHERE user_id=?",
+        (user_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
 # -----------------------
-# COMANDO CREAR INE
+# CREAR INE
 # -----------------------
 
 @bot.tree.command(
     name="crear-ine",
-    description="Tramita tu INE"
+    description="Registrar tu INE"
 )
 async def crear_ine(
     interaction: discord.Interaction,
@@ -173,9 +216,19 @@ async def crear_ine(
 
     if creada:
 
-        await interaction.response.send_message(
-            f"✅ INE registrada para {interaction.user.display_name}"
+        datos = obtener_ine(user_id)
+
+        embed = discord.Embed(
+            title="🪪 INE registrada",
+            description="Tu credencial fue registrada en el sistema.",
+            color=0x2ecc71
         )
+
+        embed.add_field(name="Nombre", value=datos[1])
+        embed.add_field(name="ID", value=datos[5])
+        embed.add_field(name="CURP", value=datos[6])
+
+        await interaction.response.send_message(embed=embed)
 
     else:
 
@@ -185,12 +238,12 @@ async def crear_ine(
         )
 
 # -----------------------
-# COMANDO VER INE
+# VER INE
 # -----------------------
 
 @bot.tree.command(
     name="ver-ine",
-    description="Muestra tu INE"
+    description="Mostrar tu INE"
 )
 async def ver_ine(interaction: discord.Interaction):
 
@@ -199,58 +252,10 @@ async def ver_ine(interaction: discord.Interaction):
 
     if datos:
 
-        embed = discord.Embed(
-            title="🪪 Instituto Nacional Electoral",
-            description="Credencial de Identificación • Nuevo León RP",
-            color=0x006847
-        )
-
-        embed.set_thumbnail(
-            url=interaction.user.display_avatar.url
-        )
-
-        embed.add_field(
-            name="Nombre",
-            value=datos[1],
-            inline=False
-        )
-
-        embed.add_field(
-            name="Edad",
-            value=str(datos[2]),
-            inline=True
-        )
-
-        embed.add_field(
-            name="Nacimiento",
-            value=datos[3],
-            inline=True
-        )
-
-        embed.add_field(
-            name="País",
-            value=datos[4],
-            inline=False
-        )
-
-        embed.add_field(
-            name="ID INE",
-            value=datos[5],
-            inline=True
-        )
-
-        embed.add_field(
-            name="CURP",
-            value=datos[6],
-            inline=True
-        )
-
-        embed.set_footer(
-            text="Gobierno de Nuevo León RP"
-        )
+        archivo = generar_ine_imagen(interaction.user, datos)
 
         await interaction.response.send_message(
-            embed=embed
+            file=discord.File(archivo)
         )
 
     else:
@@ -259,6 +264,34 @@ async def ver_ine(interaction: discord.Interaction):
             "❌ No tienes INE registrada",
             ephemeral=True
         )
+
+# -----------------------
+# ELIMINAR INE
+# -----------------------
+
+@bot.tree.command(
+    name="eliminar-ine",
+    description="Eliminar tu INE"
+)
+async def eliminar_ine(interaction: discord.Interaction):
+
+    user_id = str(interaction.user.id)
+
+    datos = obtener_ine(user_id)
+
+    if not datos:
+
+        await interaction.response.send_message(
+            "❌ No tienes INE registrada",
+            ephemeral=True
+        )
+        return
+
+    eliminar_ine_db(user_id)
+
+    await interaction.response.send_message(
+        "🗑️ Tu INE fue eliminada del sistema."
+    )
 
 # -----------------------
 # ARRANQUE
@@ -273,6 +306,5 @@ if __name__ == "__main__":
 
     if not token:
         print("❌ No existe DISCORD_TOKEN")
-
     else:
         bot.run(token)
